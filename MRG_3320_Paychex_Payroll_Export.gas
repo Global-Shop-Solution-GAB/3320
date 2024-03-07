@@ -1,0 +1,138 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Variable.Global.DSN.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Quote 4321 for Manufacturing Resource Group
+'Custom Paychex export
+'Export file:  \\\\MRGSQL\\APPS\\ADMINFOLDER_I\\PAYCHEX\\W783TA.txt.
+'File will be created during Transfer Labor to Payroll process.
+'SF>Transactions>TransferLabortoPayroll
+'Hook: 15290
+
+F.Intrinsic.Control.CallSub(Process)
+
+Program.Sub.Main.End
+
+Program.Sub.Process.Start
+Variable.local.export.declare(String)
+Variable.local.hold.declare(String)
+Variable.local.query.declare(String)
+Variable.Local.I.declare(Long)
+Variable.local.date.declare(String)
+Variable.local.file.declare(Long)
+Variable.local.filename.declare(String)
+Variable.local.sResult.declare(String)
+Variable.Local.time.Declare(String)
+Variable.Local.id.Declare(String)
+
+Function.Odbc.Connection!Conx.Openconnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+Function.Intrinsic.String.Left(Variable.Passed.888888,8,Variable.Local.date)
+Function.Intrinsic.String.Mid(Variable.Passed.888888,9,6,Variable.Local.time)
+Function.Intrinsic.String.Mid(Variable.Passed.888888,15,2,Variable.Local.id)
+
+Function.Intrinsic.File.Gethandle(Variable.Local.File)
+V.Local.filename.Set("\\MRGSQL\APPS\ADMINFOLDER_I\PAYCHEX\W783TA.txt")
+'V.Local.filename.Set("C:\W783TA.txt")
+Function.Intrinsic.File.Openforwrite(Variable.Local.Filename,Variable.Local.File)
+
+'Function.Intrinsic.File.Writeline(Variable.Local.File,"Empl#	D/E	Earn Code	Hours")
+Function.intrinsic.string.concat("SELECT EMPLOYEE, NAME, DESCR, HOURS, TYPE, EC, DOLLAR_AMT  from PYRL_LABOR_XFER WHERE RUN_CYMD = '",Variable.Local.date,"' AND RUN_TIME = '",Variable.Local.time,"'",Variable.Local.query)
+Function.Odbc.Connection!Conx.Openrecordsetro("rstX",Variable.Local.query)
+
+Function.Intrinsic.Control.dountil(Variable.Odbc.Conx!Rstx.Eof,=,True)
+
+	'there should be 10 fields in a record
+	Variable.local.export.redim(0,9)
+	'Empl# (6) - Pyrl_Labor_Xfer.Employee; right justified blank fill
+	F.Intrinsic.String.RPad(V.ODBC.Conx!rstX.FieldValTrim!EMPLOYEE," ",6,V.Local.export(0))
+	'Name (25) - Pyrl_Labor_Xfer.Name; right justified blank fill
+	F.Intrinsic.String.RPad(V.ODBC.Conx!rstX.FieldValTrim!NAME," ",25,V.Local.export(1))
+	'Blank Fill (19)
+	F.Intrinsic.String.RPad(" "," ",19,V.Local.export(2))
+	'D/E (1) - Always "E"
+	V.Local.export(3).Set("E")
+	'Earning Code (2) - Pyrl_Labor_Xfer.EC where Type='EC', else Type
+	F.Intrinsic.Control.If(V.ODBC.Conx!rstX.FieldValTrim!TYPE,=,"EC")
+		F.Intrinsic.String.RPad(V.ODBC.Conx!rstX.FieldValTrim!EC," ",2,V.Local.export(4))
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.RPad(V.ODBC.Conx!rstX.FieldValTrim!TYPE," ",2,V.Local.export(4))
+	F.Intrinsic.Control.EndIf
+	'Blank Fill (9)
+	F.Intrinsic.String.RPad(" "," ",9,V.Local.export(5))
+	'Hours (8) (2 decimals) - Pyrl_Labor_Xfer.Hours; right justified 0 fill; all EC/Type except 06
+	F.Intrinsic.Control.If(V.ODBC.Conx!rstX.FieldValTrim!TYPE,=,"EC")
+	F.Intrinsic.Control.AndIf(V.ODBC.Conx!rstX.FieldValTrim!EC,=,"06")
+		F.Intrinsic.String.RPad(" "," ",8,V.Local.export(6))
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Format(V.ODBC.Conx!rstX.FieldValTrim!HOURS,"000000.00",V.Local.export(6))
+	F.Intrinsic.Control.EndIf
+	'Blank Fill (10)
+	F.Intrinsic.String.RPad(" "," ",10,V.Local.export(7))
+	'Amount (9) (2 decimals) - Pyrl_Labor_Xfer.Dollar_Amt; right justified 0 fill; for EC 06, use
+	F.Intrinsic.Control.If(V.ODBC.Conx!rstX.FieldValTrim!TYPE,=,"EC")
+	F.Intrinsic.Control.AndIf(V.ODBC.Conx!rstX.FieldValTrim!EC,=,"06")
+		F.Intrinsic.String.Format(V.ODBC.Conx!rstX.FieldValTrim!DOLLAR_AMT,"0000000.00",V.Local.export(8))
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.RPad(" "," ",9,V.Local.export(8))
+	F.Intrinsic.Control.EndIf
+	'Blank Fill (44)
+	F.Intrinsic.String.RPad(" "," ",44,V.Local.export(9))
+
+	Function.Intrinsic.Control.For(Variable.Local.I,Variable.Local.export.Lbound,Variable.Local.export.Ubound,1)
+		Function.intrinsic.control.if(Variable.Local.I,=,0)
+			Variable.Local.hold.Set(Variable.Local.export(0))
+		Function.intrinsic.control.elseif(Variable.Local.i,<>,0)
+			Function.intrinsic.string.concat(Variable.Local.hold,Variable.Local.export(Variable.Local.I),Variable.Local.hold)
+		Function.intrinsic.control.endif
+	Function.intrinsic.control.next(Variable.Local.I)
+	Function.Intrinsic.File.Writeline(Variable.Local.File,Variable.Local.Hold)
+	Function.Odbc.Conx!Rstx.movenext
+Function.intrinsic.control.loop
+Function.Odbc.Conx!Rstx.Close
+
+Function.Intrinsic.File.Closefile(Variable.Local.File)
+
+
+
+Function.Odbc.Connection!Conx.Close
+Function.Intrinsic.Control.End
+
+
+
+Program.Sub.Process.End
+
+Program.Sub.Comments.Start
+${$0$}$MRG_Paychex_Payroll_Export$}$MEK$}$12/20/2012
+${$1$}$$}$$}$0$}$15290$}$Transfer Labor to Payroll$}$12/20/2012 1:41:23 PM$}$
+${$3$}$0$}$$}$-1$}$-1$}$$}$1/1/1900$}$It looks like Paychex_Payroll_Export_DAV.gas is the closest we have, as far as it is a fixed width file, but the data to be reported for this one, does vary.
+
+File layout:
+No field headings
+Empl# (6) – Pyrl_Labor_Xfer.Employee; right justified blank fill
+Name (25) – Pyrl_Labor_Xfer.Name; right justified blank fill
+Blank Fill (19)
+D/E (1) - Always “E”
+Earning Code (2) - Pyrl_Labor_Xfer.EC where Type='EC', else Type
+Blank Fill (9)
+Hours (8) (2 decimals) – Pyrl_Labor_Xfer.Hours; right justified 0 fill; all EC/Type except 06
+Blank Fill (10)
+Amount (9) (2 decimals) – Pyrl_Labor_Xfer.Dollar_Amt; right justified 0 fill; for EC 06, use
+Blank Fill (44)
+
+(sample provided on call)
+
+File will be created during Transfer Labor to Payroll process.
+SF>Transactions>Transfer Labor to Payroll
+Hook 15290
+
+Name file W783TA.txt. and save to \\MRGSQL\APPS\ADMINFOLDER_I\PAYCHEX
+
+
+Program.Sub.Comments.End
+
